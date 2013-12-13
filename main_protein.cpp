@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "IndexBWA.h"
+#include "IndexProtein.h"
 #include "IndexLocation.h"
 
 using namespace std;
@@ -18,13 +18,15 @@ char *bwa_pg;
 
 int main(void)
 {
-  IndexBWA index;
-  //  index.process("data/ls_orchid.fasta", 1); // It will read in the index if already exists
-  index.process("data/n.fasta", 1);
+  IndexProtein index;
+  index.process("data/protein.fasta", 1);
 
-  char Q[] = "A";
+  char Q[] = "STD";
   char convertedQuery[123];
 
+  std::string dna_alpha = "AGTC";
+  std::string protein_alpha = "APBQCRDSETFUGVHWIYKZLXM";
+  
   unsigned char nst_nt4_table[256] = {
     4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
     4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -44,11 +46,23 @@ int main(void)
     4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
   };
 
-  for (int i = 0, len = strlen(Q); i < len; ++i)
-    convertedQuery[i] = nst_nt4_table[(int)Q[i]];
+  int out_len = 0;
+  for (int i = 0, len = strlen(Q); i < len; ++i) {
+    unsigned int idx = protein_alpha.find(Q[i]);
+    convertedQuery[out_len++] = dna_alpha[idx%4];
+    convertedQuery[out_len++] = dna_alpha[idx/4%4];
+    convertedQuery[out_len++] = dna_alpha[idx/4/4%4];
+  }
+  convertedQuery[out_len] = 0;
+  puts(convertedQuery);
+  for (int i = 0; i < out_len; ++i) {
+    convertedQuery[i] = nst_nt4_table[(int)convertedQuery[i]];
+  }
+
+  printf("out_len = %d\n", out_len);
 
   unsigned long long numHits;
-  IndexLocationList* lista = index.convertedFind(convertedQuery, strlen(Q), /* thread id */ 0, &numHits, /* max num hits */ 10);
+  IndexLocationList* lista = index.convertedFind(convertedQuery, out_len, /* thread id */ 0, &numHits, /* max num hits */ 10);
 
   printf("number of hits = %llu\n", numHits);
   printf("list size = %lu\n", lista->size());

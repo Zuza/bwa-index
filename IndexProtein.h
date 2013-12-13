@@ -1,12 +1,10 @@
 /*
- * IndexBWA.h
+ * IndexProtein
  *
- *  Created on: Oct 13, 2013
- *      Author: ivan
  */
 
-#ifndef INDEXBWA_H_
-#define INDEXBWA_H_
+#ifndef INDEXPROTEIN_H_
+#define INDEXPROTEIN_H_
 
 #include <stdio.h>
 #include <string.h>
@@ -24,17 +22,16 @@
 
 typedef std::vector<IndexLocation> IndexLocationList;
 
-class IndexBWA
+class IndexProtein
 {
 public:
-	IndexBWA();
-  //	IndexBWA(SequenceSet *sequences, unsigned int seedLength);
-  //	IndexBWA(std::string sequencesPath);
-	~IndexBWA();
+	IndexProtein();
+
+	~IndexProtein();
 
 	/** Process a fasta file to create an index. If an index with the given filename already exists, function skips index creation.
 	 * @param sequencesPath Path to an input FASTA file.
-	 * @param numItrs Number of threads that will be used (paralelizirao sam svoj aligner s OpenMP-om, pa sam ove iteratore multiplicirao tako da imam za svaku jezgru zaseban. Cini mi se da je radilo dosta brze nego da sam stavio pragma omp critical, ali opet, ovo je moje prvo iskustvo s paralelizacijom. Ako koristis jednu jezgru, ovaj dio koji koristi numIters mozes maknuti (i smem_i **itrs_; dolje u private dijelu moze biti onda jednostruki pointer).
+	 * @param numItrs Number of threads that will be used
 	 */
 	void process(std::string sequencesPath, unsigned int numItrs);
 
@@ -46,13 +43,14 @@ public:
 	 * @param maxNumHits Maximum allowed number of hits. Sometimes the number of hits can be really large (dozens of thousands), which can indicate highly repetitive regions, and may introduce noise in the alignment procedure. Only if the number of hits is lesser than (or equal to) maxNumHits will the hit locations be returned. Otherwise, the return value will be equal to NULL;
 	 * @return Pointer to the list of hit locations. Equal to NULL if there are no hits, or the number of hits is larger than maxNumHits.
 	 */
+
 	IndexLocationList* convertedFind(char *query, unsigned int queryLength, unsigned int threadId, unsigned long long int *retNumHits, unsigned long int maxNumHits);
 	/** Returns the header of an indexed reference sequence.
 	 * @param sequenceId ID of the sequence.
 	 * @return String containing the header of the sequence.
 	 */
-	std::string getHeader(unsigned long long int sequenceId);
 
+	std::string getHeader(unsigned long long int sequenceId);
   //	void verbose(std::ostream &outStream);
 
 	bwaidx_t *getIndex();
@@ -64,4 +62,4 @@ private:
 	unsigned int numItrs_;
 };
 
-#endif /* INDEXBWA_H_ */
+#endif /* INDEXPROTEIN_H_ */

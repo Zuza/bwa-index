@@ -1,22 +1,19 @@
 /*
- * IndexBWA.cpp
+ * IndexProtein.cpp
  *
- *  Created on: Oct 13, 2013
- *      Author: ivan
  */
 
-#include "IndexBWA.h"
+#include "IndexProtein.h"
 #include <iostream>
 
-
-IndexBWA::IndexBWA()
+IndexProtein::IndexProtein()
 {
 	idx_ = NULL;
 	itrs_ = NULL;
 	numItrs_ = 0;
 }
 
-IndexBWA::~IndexBWA()
+IndexProtein::~IndexProtein()
 {
 	if (idx_)
 		bwa_idx_destroy(idx_);
@@ -30,24 +27,59 @@ IndexBWA::~IndexBWA()
 	}
 }
 
-void IndexBWA::process(std::string sequencesPath, unsigned int numItrs)
+void IndexProtein::process(std::string sequencesPath, unsigned int numItrs)
 {
 	char arg0[] = "index";
-	char *arg1 = (char *) sequencesPath.c_str();
+  std::string fullPath = sequencesPath + ((std::string) ".conv");
+	char *arg1 = (char *) fullPath.c_str();
 
   char* argv[] = { &arg0[0], &arg1[0], NULL };
   int   argc   = (int)(sizeof(argv) / sizeof(argv[0])) - 1;
 
+  std::string dna_alpha = "AGTC";
+  std::string protein_alpha = "APBQCRDSETFUGVHWIYKZLXM";
+
   FILE *fp=NULL;
-  fp = fopen((sequencesPath + ((std::string) ".bwt")).c_str(), "r");
-  if (fp == NULL)
+  fp = fopen(arg1, "r");
+  if (fp == NULL) {
+    static char line[16000];
+    static char outline[16000*3];
+    FILE* in = fopen(sequencesPath.c_str(), "r");
+
+    fp = fopen(arg1, "w");
+    bool comment = false;
+    while (fgets(line, 16000, in)) {
+      if (line[0] == '>') comment = true;
+      int len = strlen(line);
+      if (comment) {
+        fputs(line, fp);
+        if (line[len-1] == '\n') comment = false;
+      } else {
+        int out_len = 0;
+        for (int i = 0; i < len; ++i)
+          if (isspace(line[i]))
+            outline[out_len++] = line[i];
+          else {
+            unsigned int idx = protein_alpha.find(line[i]);
+            outline[out_len++] = dna_alpha[idx%4];
+            outline[out_len++] = dna_alpha[idx/4%4];
+            outline[out_len++] = dna_alpha[idx/4/4%4];
+          }
+        fputs(outline, fp);
+      }
+    }
+
+    fclose(in);
+    fclose(fp);
+
     bwa_index(argc, argv);
+  }
   else {
     std::cout << "BWT index already exists, skipping index creation. Loading index from file." << std::endl;
     fclose(fp);
   }
 
-	idx_ = bwa_idx_load(sequencesPath.c_str(), BWA_IDX_ALL); // load the BWA index
+	idx_ = bwa_idx_load(fullPath.c_str(), BWA_IDX_ALL); // load the BWA index
 
 	numItrs_ = numItrs;
 	itrs_ = (smem_i **) calloc(numItrs_, sizeof(smem_i *));
@@ -55,12 +87,12 @@ void IndexBWA::process(std::string sequencesPath, unsigned int numItrs)
 		itrs_[i] = smem_itr_init(idx_->bwt);
 }
 
-bwaidx_t *IndexBWA::getIndex()
+bwaidx_t *IndexProtein::getIndex()
 {
 	return idx_;
 }
 
-IndexLocationList* IndexBWA::convertedFind(char *query, unsigned int queryLength, unsigned int threadId, unsigned long long int *retNumHits, unsigned long int maxNumHits)
+IndexLocationList* IndexProtein::convertedFind(char *query, unsigned int queryLength, unsigned int threadId, unsigned long long int *retNumHits, unsigned long int maxNumHits)
 {
 	unsigned long long int numHits=0;
 	unsigned long long int i=0, k=0;
@@ -83,11 +115,8 @@ IndexLocationList* IndexBWA::convertedFind(char *query, unsigned int queryLength
 				continue;
 
 			// Check the number of hits.
-      numHits += p->x[2];
 			if (numRet <= maxNumHits)
 			{
-				ret->resize((ret->size() + p->x[2]));
-
 				for (k=0; k < p->x[2] && numRet <= maxNumHits; ++k)
 				{
 					bwtint_t pos;
@@ -96,12 +125,16 @@ IndexLocationList* IndexBWA::convertedFind(char *query, unsigned int queryLength
 					len  = (uint32_t)p->info - (p->info>>32);
 					pos = bns_depos(idx_->bns, bwt_sa(idx_->bwt, p->x[0] + k), &is_rev);
 
-					if (is_rev)
-					{
-						pos -= len - 1;
+          // if it's reversed, skip it because it doesn't exist in protein sequences
+					if (is_rev) {
+            continue;
 					}
-
 					bns_cnt_ambi(idx_->bns, pos, len, &ref_id);
+
+          // only positions 0, 3, 6, ... correspond to real protein starts
+          if ((pos - idx_->bns->anns[ref_id].offset) % 3 != 0) {
+            continue;
+          }
 
 					// Note: the hit position (pos) is absolute, which means that
           // all reference sequences that were indexed in the original
@@ -110,9 +143,10 @@ IndexLocationList* IndexBWA::convertedFind(char *query, unsigned int queryLength
           // beginning of the FASTA file. That's why we need to subtract
           // the offset of the current reference sequence that the hit is
           // located on.
-					IndexLocation currentLocation(ref_id, (pos - idx_->bns->anns[ref_id].offset), (unsigned char)is_rev);
-					(*ret)[numRet] = currentLocation;
+					IndexLocation currentLocation(ref_id, (pos - idx_->bns->anns[ref_id].offset) / 3, (unsigned char)is_rev);
+					(*ret).push_back(currentLocation);
 
+          numHits += 1;
 					numRet += 1;
 				}
 			}
@@ -123,17 +157,17 @@ IndexLocationList* IndexBWA::convertedFind(char *query, unsigned int queryLength
 	return ret;
 }
 
-// void IndexBWA::verbose(std::ostream &outStream)
+// void IndexProtein::verbose(std::ostream &outStream)
 // {
 // 	ErrorHandling::functionNotImplemented(((std::string) __FUNCTION__));
 // }
 
-std::string IndexBWA::getHeader(unsigned long long int sequenceId)
+std::string IndexProtein::getHeader(unsigned long long int sequenceId)
 {
 	return ((std::string) idx_->bns->anns[sequenceId].name);
 }
 
-smem_i** IndexBWA::getItrs()
+smem_i** IndexProtein::getItrs()
 {
 	return itrs_;
 }
