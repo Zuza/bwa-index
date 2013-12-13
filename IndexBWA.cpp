@@ -92,11 +92,10 @@ IndexLocationList* IndexBWA::find(char *query, unsigned int queryLength, unsigne
 			if ((uint32_t)p->info - (p->info>>32) < queryLength)
 				continue;
 
-			numHits += p->x[2];
-
 			// Check the number of hits.
-			if (p->x[2] <= maxNumHits)
+			if (numHits <= maxNumHits)
 			{
+        numHits += p->x[2];
 				ret->resize((ret->size() + p->x[2]));
 
 				for (k=0; k < p->x[2]; ++k)
@@ -125,7 +124,6 @@ IndexLocationList* IndexBWA::find(char *query, unsigned int queryLength, unsigne
 	}
 
 	*retNumHits = numHits;
-
 	return ret;
 }
 
